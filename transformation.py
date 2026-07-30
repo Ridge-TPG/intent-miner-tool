@@ -482,7 +482,7 @@ def generate_json():
             messagebox.showwarning("Warning", "No data found")
             return
 
-        # ✅ NEW: transcript length validation
+        # transcript length validation
         long_count = validate_transcripts(conversations)
 
         if long_count > 0:
