@@ -51,6 +51,7 @@
     .primary { background: #2563eb; color: white; }
     .success { background: #16a34a; color: white; }
     .secondary { background: #e5e7eb; }
+    .danger { background: #dc2626; color: white; }
 
     .drop-zone {
       border: 2px dashed #9ca3af;
@@ -75,6 +76,10 @@
     .preview {
       height: 250px;
     }
+
+    .row {
+      margin-top: 10px;
+    }
   </style>
 </head>
 
@@ -94,12 +99,20 @@
       <input type="file" id="fileInput">
     </div>
     <p id="fileInfo"></p>
+
+    <div class="row">
+      <button class="danger" onclick="clearFile()">Clear File</button>
+    </div>
   </div>
 
   <!-- Input -->
   <div class="card">
     <h3>Paste Utterances</h3>
     <textarea id="inputText" placeholder="One utterance per line..."></textarea>
+
+    <div class="row">
+      <button class="danger" onclick="clearInput()">Clear Paste</button>
+    </div>
   </div>
 
   <!-- Stats -->
@@ -112,6 +125,7 @@
   <div class="card">
     <button class="secondary" onclick="previewJSON()">Preview</button>
     <button class="success" onclick="generateJSON()">Generate JSON</button>
+    <button class="danger" onclick="clearPreview()">Clear Preview</button>
   </div>
 
   <!-- Preview -->
@@ -128,6 +142,24 @@ const MAX_TRANSCRIPT = 500;
 
 let conversations = [];
 let warnings = 0;
+
+// ---------- CLEAR FUNCTIONS ----------
+function clearInput() {
+  document.getElementById("inputText").value = "";
+  conversations = [];
+  updateStats();
+}
+
+function clearPreview() {
+  document.getElementById("preview").value = "";
+}
+
+function clearFile() {
+  document.getElementById("fileInput").value = "";
+  document.getElementById("fileInfo").innerText = "";
+  conversations = [];
+  updateStats();
+}
 
 // ---------- CSV PARSER ----------
 function parseCSV(text) {
@@ -258,6 +290,8 @@ function previewJSON() {
 
   document.getElementById("preview").value =
     JSON.stringify(output, null, 2);
+
+  updateStats();
 }
 
 // ---------- DOWNLOAD ----------
