@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Intent Miner Tool</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+    }
+
+    header {
+      background: #1f2937;
+      color: white;
+      padding: 15px 20px;
+      font-size: 18px;
+    }
+
+    .container {
+      padding: 20px;
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    textarea {
+      width: 100%;
+      height: 160px;
+      font-family: monospace;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      padding: 10px;
+    }
+
+    button {
+      padding: 10px 15px;
+      margin-right: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .primary { background: #2563eb; color: white; }
+    .success { background: #16a34a; color: white; }
+    .secondary { background: #e5e7eb; }
+
+    .drop-zone {
+      border: 2px dashed #9ca3af;
+      padding: 25px;
+      text-align: center;
+      border-radius: 8px;
+      color: #6b7280;
+    }
+
+    .drop-zone.dragover {
+      background: #eef2ff;
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    .stats {
+      display: flex;
+      gap: 20px;
+      font-weight: bold;
+    }
+
+    .preview {
+      height: 250px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  Intent Miner JSON Generator
+</header>
+
+<div class="container">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="drop-zone" id="dropZone">
+      Drag & drop CSV/TXT here or
+      <br><br>
+      <input type="file" id="fileInput">
+    </div>
+    <p id="fileInfo"></p>
+  </div>
+
+  <!-- Input -->
+  <div class="card">
+    <h3>Paste Utterances</h3>
+    <textarea id="inputText" placeholder="One utterance per line..."></textarea>
+  </div>
+
+  <!-- Stats -->
+  <div class="card stats">
+    <div id="count">Conversations: 0</div>
+    <div id="warnings">Warnings: 0</div>
+  </div>
+
+  <!-- Actions -->
+  <div class="card">
+    <button class="secondary" onclick="previewJSON()">Preview</button>
+    <button class="success" onclick="generateJSON()">Generate JSON</button>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <h3>Preview</h3>
+    <textarea id="preview" class="preview"></textarea>
+  </div>
+
+</div>
+
+<script>
+const MAX_CONVERSATIONS = 30000;
+const MAX_TRANSCRIPT = 500;
+
+let conversations = [];
+let warnings = 0;
+
+// ---------- CSV PARSER ----------
+function parseCSV(text) {
+  const lines = text.split("\n");
+  const headers = lines[0].split(",");
+
+  function get(row, names) {
+    for (let n of names) {
+      let idx = headers.findIndex(h => h.toLowerCase().trim() === n);
+      if (idx !== -1) return row[idx];
+    }
+    return "";
+  }
+
+  let map = {};
+  warnings = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i]) continue;
+
+    let row = lines[i].split(",");
+
+    let id = get(row, ["conversation_id","conversation id","id"]) || "id_"+i;
+    let participant = get(row, ["participant","participant purpose","role"]) || "customer";
+    let textVal = get(row, ["transcript","utterance","text","message","body","segment text"]);
+
+    if (!textVal) continue;
+
+    if (textVal.length > MAX_TRANSCRIPT) {
+      warnings++;
+      textVal = textVal.substring(0, MAX_TRANSCRIPT);
+    }
+
+    if (!map[id]) map[id] = [];
+
+    map[id].push({
+      participant: participant.toLowerCase(),
+      transcript: textVal
+    });
+  }
+
+  return Object.keys(map).map(id => ({
+    id: id,
+    turns: map[id]
+  }));
+}
+
+// ---------- TEXT PARSER ----------
+function parseText(text) {
+  warnings = 0;
+
+  return text.split("\n")
+    .filter(x => x.trim())
+    .map((t,i) => {
+      if (t.length > MAX_TRANSCRIPT) warnings++;
+      return {
+        id: "id_"+(i+1),
+        turns: [{
+          participant: "customer",
+          transcript: t.substring(0, MAX_TRANSCRIPT)
+        }]
+      };
+    });
+}
+
+// ---------- STATUS ----------
+function updateStats() {
+  document.getElementById("count").innerText =
+    "Conversations: " + conversations.length;
+
+  document.getElementById("warnings").innerText =
+    "Warnings: " + warnings;
+}
+
+// ---------- FILE LOAD ----------
+function handleFile(file) {
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+    const text = e.target.result;
+
+    if (file.name.endsWith(".csv")) {
+      conversations = parseCSV(text);
+    } else {
+      conversations = parseText(text);
+    }
+
+    document.getElementById("fileInfo").innerText = "Loaded: " + file.name;
+
+    updateStats();
+  };
+
+  reader.readAsText(file);
+}
+
+document.getElementById("fileInput").addEventListener("change", e => {
+  handleFile(e.target.files[0]);
+});
+
+// Drag & drop
+const dropZone = document.getElementById("dropZone");
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragover");
+});
+
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  handleFile(e.dataTransfer.files[0]);
+});
+
+// ---------- PREVIEW ----------
+function previewJSON() {
+  if (conversations.length === 0) {
+    conversations = parseText(document.getElementById("inputText").value);
+  }
+
+  const output = {
+    locale: "en-us",
+    conversations: conversations
+  };
+
+  document.getElementById("preview").value =
+    JSON.stringify(output, null, 2);
+}
+
+// ---------- DOWNLOAD ----------
+function download(data, name) {
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+// ---------- GENERATE ----------
+function generateJSON() {
+  if (conversations.length === 0) {
+    conversations = parseText(document.getElementById("inputText").value);
+  }
+
+  if (conversations.length === 0) {
+    alert("No data found");
+    return;
+  }
+
+  if (conversations.length > MAX_CONVERSATIONS) {
+    if (!confirm("Too many conversations. Split files?")) return;
+
+    for (let i=0;i<conversations.length;i+=MAX_CONVERSATIONS) {
+      let chunk = conversations.slice(i, i+MAX_CONVERSATIONS);
+
+      download({
+        locale:"en-us",
+        conversations: chunk
+      }, `intent_part${(i/MAX_CONVERSATIONS)+1}.json`);
+    }
+    return;
+  }
+
+  download({
+    locale:"en-us",
+    conversations: conversations
+  }, "intent.json");
+}
+</script>
+
+</body>
+</html>
