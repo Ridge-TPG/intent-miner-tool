@@ -17,6 +17,16 @@
       font-size: 18px;
     }
 
+    .header-btn {
+      float: right;
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
     .container {
       padding: 20px;
       max-width: 1100px;
@@ -48,7 +58,6 @@
       cursor: pointer;
     }
 
-    .primary { background: #2563eb; color: white; }
     .success { background: #16a34a; color: white; }
     .secondary { background: #e5e7eb; }
     .danger { background: #dc2626; color: white; }
@@ -85,6 +94,28 @@
       background: #fff7ed;
       border: 1px solid #fdba74;
     }
+
+    /* MODAL */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+    }
+
+    .modal-content {
+      background: white;
+      margin: 80px auto;
+      padding: 20px;
+      width: 600px;
+      max-width: 90%;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
   </style>
 </head>
 
@@ -92,6 +123,7 @@
 
 <header>
   Intent Miner JSON Generator
+  <button class="header-btn" onclick="openModal()">Instructions</button>
 </header>
 
 <div class="container">
@@ -139,6 +171,45 @@
 
 </div>
 
+<!-- MODAL -->
+<div id="helpModal" class="modal">
+  <div class="modal-content">
+    <h2>How to Use</h2>
+
+    <p><b>1. Load Data</b></p>
+    <ul>
+      <li>Upload CSV/TXT OR paste utterances</li>
+    </ul>
+
+    <p><b>2. Review</b></p>
+    <ul>
+      <li>Check conversation count</li>
+      <li>Click "View Warnings"</li>
+    </ul>
+
+    <p><b>3. Preview</b></p>
+    <ul>
+      <li>Click Preview to verify JSON</li>
+    </ul>
+
+    <p><b>4. Generate</b></p>
+    <ul>
+      <li>Click Generate JSON</li>
+    </ul>
+
+    <hr>
+
+    <p><b>Limits:</b></p>
+    <ul>
+      <li>30,000 conversations</li>
+      <li>500 chars per transcript</li>
+      <li>100 chars per ID</li>
+    </ul>
+
+    <button class="danger" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
 <script>
 const MAX_CONVERSATIONS = 30000;
 const MAX_TRANSCRIPT = 500;
@@ -147,6 +218,22 @@ const MAX_ID_LENGTH = 100;
 let conversations = [];
 let warnings = 0;
 let warningMessages = [];
+
+// ---------- MODAL ----------
+function openModal() {
+  document.getElementById("helpModal").style.display = "block";
+}
+
+function closeModal() {
+  document.getElementById("helpModal").style.display = "none";
+}
+
+window.onclick = function(e) {
+  const modal = document.getElementById("helpModal");
+  if (e.target === modal) {
+    modal.style.display = "none";
+  }
+};
 
 // ---------- CLEAR ----------
 function clearInput() {
@@ -230,14 +317,16 @@ function parseText(text) {
 
       let id = "id_"+(i+1);
 
+      // ID length check
       if (id.length > MAX_ID_LENGTH) {
-        warningMessages.push(`Line ${i+1}: ID truncated`);
+        warningMessages.push(`Line ${i+1}: ID truncated (max ${MAX_ID_LENGTH})`);
         warnings++;
         id = id.substring(0, MAX_ID_LENGTH);
       }
 
+      // transcript check
       if (t.length > MAX_TRANSCRIPT) {
-        warningMessages.push(`Line ${i+1}: Transcript truncated`);
+        warningMessages.push(`Line ${i+1}: Transcript truncated (max ${MAX_TRANSCRIPT})`);
         warnings++;
       }
 
@@ -251,15 +340,15 @@ function parseText(text) {
     });
 }
 
-// ---------- WARNINGS UI ----------
+// ---------- WARNINGS ----------
 function toggleWarnings() {
   const box = document.getElementById("warningsBox");
 
   if (box.style.display === "none") {
     box.style.display = "block";
-    box.innerText = warningMessages.length
-      ? warningMessages.join("\n")
-      : "No warnings 🎉";
+    box.innerText = (window.allWarnings && window.allWarnings.length)
+      ? window.allWarnings.join("\n")
+      : "No warnings found";
   } else {
     box.style.display = "none";
   }
@@ -267,11 +356,24 @@ function toggleWarnings() {
 
 // ---------- STATS ----------
 function updateStats() {
+  let totalWarnings = warnings;
+  let extraWarnings = [];
+
+  // conversation limit check
+  if (conversations.length > MAX_CONVERSATIONS) {
+    extraWarnings.push(
+      `Too many conversations (${conversations.length}). Max allowed is ${MAX_CONVERSATIONS}. File will be split.`
+    );
+  }
+
   document.getElementById("count").innerText =
     "Conversations: " + conversations.length;
 
   document.getElementById("warnings").innerText =
-    "Warnings: " + warnings;
+    "Warnings: " + (totalWarnings + extraWarnings.length);
+
+  // merge warnings for display
+  window.allWarnings = [...warningMessages, ...extraWarnings];
 }
 
 // ---------- FILE ----------
