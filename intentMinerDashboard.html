@@ -18,7 +18,8 @@
     }
 
     .header-btn {
-      float: right;
+      float: center;
+      align-items: center;
       background: #2563eb;
       color: white;
       border: none;
@@ -122,8 +123,22 @@
 <body>
 
 <header>
-  Intent Miner JSON Generator
-  <button class="header-btn" onclick="openModal()">Instructions</button>
+  <div>Intent Miner JSON Generator</div>
+
+  <div class="header-actions">
+    <a
+      class="header-btn header-link"
+      href="https://github.com/YOUR-USERNAME/YOUR-REPO"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      GitHub
+    </a>
+
+    <button class="header-btn" onclick="openReadmeModal()">README</button>
+
+    <button class="header-btn" onclick="openModal()">Instructions</button>
+  </div>
 </header>
 
 <div class="container">
@@ -176,23 +191,28 @@
   <div class="modal-content">
     <h2>How to Use</h2>
 
-    <p><b>1. Load Data</b></p>
+    <p><b>1. Go to genesys and export data </b></p>
+    <ul>
+      <li>head to the bot you want data for, then go to optimisation dashboard and export data</li>
+    </ul>
+
+    <p><b>2. Load Data</b></p>
     <ul>
       <li>Upload CSV/TXT OR paste utterances</li>
     </ul>
 
-    <p><b>2. Review</b></p>
+    <p><b>3. Review</b></p>
     <ul>
       <li>Check conversation count</li>
       <li>Click "View Warnings"</li>
     </ul>
 
-    <p><b>3. Preview</b></p>
+    <p><b>4. Preview</b></p>
     <ul>
       <li>Click Preview to verify JSON</li>
     </ul>
 
-    <p><b>4. Generate</b></p>
+    <p><b>5. Generate</b></p>
     <ul>
       <li>Click Generate JSON</li>
     </ul>
@@ -235,10 +255,66 @@ window.onclick = function(e) {
   }
 };
 
+// ---------- HELPERS ----------
+function normalizeHeader(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function cleanCell(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^"|"$/g, "")
+    .trim();
+}
+
+function truncateId(id, rowNumber) {
+  id = cleanCell(id);
+
+  if (!id) return "";
+
+  if (id.length > MAX_ID_LENGTH) {
+    warningMessages.push(`Row ${rowNumber}: ID truncated`);
+    warnings++;
+    return id.substring(0, MAX_ID_LENGTH);
+  }
+
+  return id;
+}
+
+function truncateTranscript(text, rowNumber, fieldName) {
+  text = cleanCell(text);
+
+  if (!text) return "";
+
+  if (text.length > MAX_TRANSCRIPT) {
+    warningMessages.push(`Row ${rowNumber}: ${fieldName} truncated`);
+    warnings++;
+    return text.substring(0, MAX_TRANSCRIPT);
+  }
+
+  return text;
+}
+
+function getIndex(headers, possibleNames) {
+  const normalizedHeaders = headers.map(normalizeHeader);
+  const normalizedNames = possibleNames.map(normalizeHeader);
+
+  for (const name of normalizedNames) {
+    const index = normalizedHeaders.indexOf(name);
+    if (index !== -1) return index;
+  }
+
+  return -1;
+}
+
 // ---------- CLEAR ----------
 function clearInput() {
   document.getElementById("inputText").value = "";
   conversations = [];
+  warnings = 0;
+  warningMessages = [];
   updateStats();
 }
 
@@ -249,61 +325,241 @@ function clearPreview() {
 function clearFile() {
   document.getElementById("fileInput").value = "";
   document.getElementById("fileInfo").innerText = "";
+  document.getElementById("preview").value = "";
   conversations = [];
+  warnings = 0;
+  warningMessages = [];
   updateStats();
+  // clear pasted utterance when file is cleared
+  document.getElementById("inputText").value = "";
+  conversations = [];
+  warnings = 0;
+  warningMessages = [];
+  updateStats();
+}
+
+// ---------- CSV PARSER ----------
+function parseCSVRows(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let insideQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"' && insideQuotes && nextChar === '"') {
+      cell += '"';
+      i++;
+    } else if (char === '"') {
+      insideQuotes = !insideQuotes;
+    } else if (char === "," && !insideQuotes) {
+      row.push(cell);
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !insideQuotes) {
+      if (char === "\r" && nextChar === "\n") i++;
+
+      row.push(cell);
+
+      if (row.some(x => cleanCell(x))) {
+        rows.push(row);
+      }
+
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell);
+
+  if (row.some(x => cleanCell(x))) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+// ---------- MARKDOWN TABLE PARSER ----------
+function parseMarkdownTableRows(text) {
+  const lines = text
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.includes("|"));
+
+  const rows = [];
+
+  for (const line of lines) {
+    let cleaned = line;
+
+    if (cleaned.startsWith("|")) cleaned = cleaned.substring(1);
+    if (cleaned.endsWith("|")) cleaned = cleaned.substring(0, cleaned.length - 1);
+
+    const cells = cleaned.split("|").map(cleanCell);
+
+    const isSeparator = cells.every(cell => /^:?-{2,}:?$/.test(cell) || cell === "");
+
+    if (!isSeparator && cells.length > 1) {
+      rows.push(cells);
+    }
+  }
+
+  return rows;
+}
+
+// ---------- CONVERSATION BUILDER ----------
+function rowsToConversations(rows) {
+  warnings = 0;
+  warningMessages = [];
+
+  if (!rows || rows.length < 2) return [];
+
+  const headers = rows[0];
+
+  const conversationIdIndex = getIndex(headers, [
+    "Conversation ID",
+    "conversation_id",
+    "conversationid",
+    "id",
+    "Session ID",
+    "session_id",
+    "sessionid"
+  ]);
+
+  const utteranceIndex = getIndex(headers, [
+    "Utterance",
+    "User Utterance",
+    "Customer Utterance",
+    "Message",
+    "Text",
+    "Transcript",
+    "Segment Text"
+  ]);
+
+  const promptIndex = getIndex(headers, [
+    "Prompt",
+    "Agent Prompt",
+    "Bot Prompt",
+    "Agent Response",
+    "Response",
+    "Reply"
+  ]);
+
+  const participantIndex = getIndex(headers, [
+    "Participant",
+    "Speaker",
+    "Role"
+  ]);
+
+  const transcriptIndex = getIndex(headers, [
+    "Transcript",
+    "Text",
+    "Message",
+    "Body",
+    "Segment Text"
+  ]);
+
+  const map = new Map();
+  let fallbackIdCounter = 1;
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+
+    if (!row || row.every(cell => !cleanCell(cell))) continue;
+
+    let id = "";
+
+    if (conversationIdIndex !== -1) {
+      id = truncateId(row[conversationIdIndex], i + 1);
+    }
+
+    if (!id) {
+      id = "id_" + fallbackIdCounter;
+      fallbackIdCounter++;
+    }
+
+    if (!map.has(id)) {
+      map.set(id, {
+        id: id,
+        turns: []
+      });
+    }
+
+    const conversation = map.get(id);
+
+    /*
+      Main format:
+      Utterance = customer
+      Prompt = agent
+
+      This intentionally ignores:
+      Ask Action Number
+      Ask Action Name
+      Ask Action Type
+      Ask Action Outcome
+    */
+
+    if (utteranceIndex !== -1) {
+      const utterance = truncateTranscript(row[utteranceIndex], i + 1, "Utterance");
+
+      if (utterance) {
+        conversation.turns.push({
+          participant: "customer",
+          transcript: utterance
+        });
+      }
+    }
+
+    if (promptIndex !== -1) {
+      const prompt = truncateTranscript(row[promptIndex], i + 1, "Prompt");
+
+      if (prompt) {
+        conversation.turns.push({
+          participant: "agent",
+          transcript: prompt
+        });
+      }
+    }
+
+    /*
+      Fallback:
+      If your file already has Participant + Transcript columns,
+      this also supports that.
+    */
+    if (utteranceIndex === -1 && promptIndex === -1 && participantIndex !== -1 && transcriptIndex !== -1) {
+      let participant = cleanCell(row[participantIndex]).toLowerCase();
+      let transcript = truncateTranscript(row[transcriptIndex], i + 1, "Transcript");
+
+      if (participant.includes("agent") || participant.includes("bot")) {
+        participant = "agent";
+      } else {
+        participant = "customer";
+      }
+
+      if (transcript) {
+        conversation.turns.push({
+          participant: participant,
+          transcript: transcript
+        });
+      }
+    }
+  }
+
+  return Array.from(map.values()).filter(c => c.turns.length > 0);
 }
 
 // ---------- CSV ----------
 function parseCSV(text) {
-  const lines = text.split("\n");
-  const headers = lines[0].split(",");
+  const rows = parseCSVRows(text);
+  return rowsToConversations(rows);
+}
 
-  function get(row, names) {
-    for (let n of names) {
-      let idx = headers.findIndex(h => h.toLowerCase().trim() === n);
-      if (idx !== -1) return row[idx];
-    }
-    return "";
-  }
-
-  let map = {};
-  warnings = 0;
-  warningMessages = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    if (!lines[i]) continue;
-
-    let row = lines[i].split(",");
-
-    let id = get(row, ["conversation_id","conversation id","id"]) || "id_"+i;
-
-    if (id.length > MAX_ID_LENGTH) {
-      warningMessages.push(`Row ${i}: ID truncated`);
-      warnings++;
-      id = id.substring(0, MAX_ID_LENGTH);
-    }
-
-    let textVal = get(row, ["transcript","utterance","text","message","body","segment text"]);
-    if (!textVal) continue;
-
-    if (textVal.length > MAX_TRANSCRIPT) {
-      warningMessages.push(`Row ${i}: Transcript truncated`);
-      warnings++;
-      textVal = textVal.substring(0, MAX_TRANSCRIPT);
-    }
-
-    if (!map[id]) map[id] = [];
-
-    map[id].push({
-      participant: "customer",
-      transcript: textVal
-    });
-  }
-
-  return Object.keys(map).map(id => ({
-    id: id,
-    turns: map[id]
-  }));
+// ---------- MARKDOWN TABLE ----------
+function parseMarkdownTable(text) {
+  const rows = parseMarkdownTableRows(text);
+  return rowsToConversations(rows);
 }
 
 // ---------- TEXT ----------
@@ -311,22 +567,19 @@ function parseText(text) {
   warnings = 0;
   warningMessages = [];
 
-  return text.split("\n")
+  return text.split(/\r?\n/)
     .filter(x => x.trim())
-    .map((t,i) => {
+    .map((t, i) => {
+      let id = "id_" + (i + 1);
 
-      let id = "id_"+(i+1);
-
-      // ID length check
       if (id.length > MAX_ID_LENGTH) {
-        warningMessages.push(`Line ${i+1}: ID truncated (max ${MAX_ID_LENGTH})`);
+        warningMessages.push(`Line ${i + 1}: ID truncated`);
         warnings++;
         id = id.substring(0, MAX_ID_LENGTH);
       }
 
-      // transcript check
       if (t.length > MAX_TRANSCRIPT) {
-        warningMessages.push(`Line ${i+1}: Transcript truncated (max ${MAX_TRANSCRIPT})`);
+        warningMessages.push(`Line ${i + 1}: Transcript truncated`);
         warnings++;
       }
 
@@ -340,11 +593,34 @@ function parseText(text) {
     });
 }
 
+// ---------- AUTO PARSE ----------
+function parseInputText(text, fileName = "") {
+  const trimmed = text.trim();
+
+  if (!trimmed) return [];
+
+  const firstLine = trimmed.split(/\r?\n/)[0];
+
+  if (fileName.toLowerCase().endsWith(".csv")) {
+    return parseCSV(trimmed);
+  }
+
+  if (firstLine.includes("|") && trimmed.includes("---")) {
+    return parseMarkdownTable(trimmed);
+  }
+
+  if (firstLine.includes(",") && firstLine.toLowerCase().includes("utterance")) {
+    return parseCSV(trimmed);
+  }
+
+  return parseText(trimmed);
+}
+
 // ---------- WARNINGS ----------
 function toggleWarnings() {
   const box = document.getElementById("warningsBox");
 
-  if (box.style.display === "none") {
+  if (box.style.display === "none" || box.style.display === "") {
     box.style.display = "block";
     box.innerText = (window.allWarnings && window.allWarnings.length)
       ? window.allWarnings.join("\n")
@@ -359,10 +635,9 @@ function updateStats() {
   let totalWarnings = warnings;
   let extraWarnings = [];
 
-  // conversation limit check
   if (conversations.length > MAX_CONVERSATIONS) {
     extraWarnings.push(
-      `Too many conversations (${conversations.length}). Max allowed is ${MAX_CONVERSATIONS}. File will be split.`
+      `Too many conversations (${conversations.length}). Max allowed is ${MAX_CONVERSATIONS}.`
     );
   }
 
@@ -372,20 +647,19 @@ function updateStats() {
   document.getElementById("warnings").innerText =
     "Warnings: " + (totalWarnings + extraWarnings.length);
 
-  // merge warnings for display
   window.allWarnings = [...warningMessages, ...extraWarnings];
 }
 
 // ---------- FILE ----------
 function handleFile(file) {
+  if (!file) return;
+
   const reader = new FileReader();
 
   reader.onload = function(e) {
     const text = e.target.result;
 
-    conversations = file.name.endsWith(".csv")
-      ? parseCSV(text)
-      : parseText(text);
+    conversations = parseInputText(text, file.name);
 
     document.getElementById("fileInfo").innerText = "Loaded: " + file.name;
     updateStats();
@@ -398,10 +672,38 @@ document.getElementById("fileInput").addEventListener("change", e => {
   handleFile(e.target.files[0]);
 });
 
+// ---------- DRAG AND DROP ----------
+const dropZone = document.getElementById("dropZone");
+
+dropZone.addEventListener("dragover", function(e) {
+  e.preventDefault();
+  dropZone.style.background = "#eef2ff";
+});
+
+dropZone.addEventListener("dragleave", function(e) {
+  e.preventDefault();
+  dropZone.style.background = "";
+});
+
+dropZone.addEventListener("drop", function(e) {
+  e.preventDefault();
+  dropZone.style.background = "";
+
+  const file = e.dataTransfer.files[0];
+  handleFile(file);
+});
+
 // ---------- PREVIEW ----------
 function previewJSON() {
+  const pastedText = document.getElementById("inputText").value;
+
+  if (pastedText.trim()) {
+    conversations = parseInputText(pastedText);
+  }
+
   if (conversations.length === 0) {
-    conversations = parseText(document.getElementById("inputText").value);
+    alert("No data found");
+    return;
   }
 
   document.getElementById("preview").value =
@@ -415,17 +717,24 @@ function previewJSON() {
 
 // ---------- DOWNLOAD ----------
 function download(data, name) {
-  const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json"
+  });
+
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = name;
   a.click();
+
+  URL.revokeObjectURL(a.href);
 }
 
 // ---------- GENERATE ----------
 function generateJSON() {
-  if (conversations.length === 0) {
-    conversations = parseText(document.getElementById("inputText").value);
+  const pastedText = document.getElementById("inputText").value;
+
+  if (pastedText.trim()) {
+    conversations = parseInputText(pastedText);
   }
 
   if (conversations.length === 0) {
@@ -433,8 +742,10 @@ function generateJSON() {
     return;
   }
 
+  updateStats();
+
   download({
-    locale:"en-us",
+    locale: "en-us",
     conversations: conversations
   }, "intent.json");
 }
