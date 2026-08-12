@@ -10,11 +10,146 @@
       margin: 0;
     }
 
+    .readme-modal-content {
+      width: 900px;
+      max-width: 95%;
+      max-height: 85vh;
+      overflow: hidden;
+    }
+
+    .readme-viewer {
+      background: #f9fafb;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      padding: 15px;
+      max-height: 60vh;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+      color: #111827;
+    }
+
+      .markdown-body {
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3 {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      color: #111827;
+    }
+
+    .markdown-body h1 {
+      font-size: 26px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 8px;
+    }
+
+    .markdown-body h2 {
+      font-size: 22px;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 6px;
+    }
+
+    .markdown-body h3 {
+      font-size: 18px;
+    }
+
+    .markdown-body p {
+      margin: 10px 0;
+    }
+
+    .markdown-body ul,
+    .markdown-body ol {
+      padding-left: 25px;
+    }
+
+    .markdown-body code {
+      background: #f3f4f6;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+    }
+
+    .markdown-body pre {
+      background: #111827;
+      color: #f9fafb;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+
+    .markdown-body pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .markdown-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 15px 0;
+      font-size: 13px;
+    }
+
+    .markdown-body th,
+    .markdown-body td {
+      border: 1px solid #d1d5db;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .markdown-body th {
+      background: #f3f4f6;
+      font-weight: bold;
+    }
+
+    .markdown-body blockquote {
+      border-left: 4px solid #9ca3af;
+      padding-left: 12px;
+      color: #4b5563;
+      margin-left: 0;
+    }
+
     header {
       background: #1f2937;
       color: white;
       padding: 15px 20px;
       font-size: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .header-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .header-link {
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .header-btn:hover {
+      background: #1d4ed8;
     }
 
     .header-btn {
@@ -128,7 +263,7 @@
   <div class="header-actions">
     <a
       class="header-btn header-link"
-      href="https://github.com/YOUR-USERNAME/YOUR-REPO"
+      href="https://github.com/Ridge-TPG/intent-miner-tool"
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -230,6 +365,168 @@
   </div>
 </div>
 
+<!-- README MODAL -->
+<div id="readmeModal" class="modal">
+  <div class="modal-content readme-modal-content">
+    <h2>README</h2>
+
+    <div id="readmeViewer" class="readme-viewer markdown-body"></div>
+
+    <div class="row">
+      <button class="secondary" onclick="copyReadme()">Copy README</button>
+      <button class="danger" onclick="closeReadmeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script type="text/plain" id="embeddedReadme">
+# Intent Miner JSON Generator
+
+A simple browser-based tool to transform utterances or Genesys Cloud exports into the JSON format required for Genesys Intent Miner.
+
+No installation required. Simply open the HTML file in your web browser and start generating Intent Miner-ready JSON.
+
+---
+
+## Features
+
+- Convert plain text utterances into Intent Miner format
+- Support for Genesys CSV exports
+- Supports Genesys-style exported tables
+- Handles multi-turn conversations using customer and agent turns
+- Live conversation counter
+- Built-in warnings panel
+- Enforces Genesys limits:
+  - Max 30,000 conversations
+  - Max 500 characters per transcript
+  - Max 100 characters per conversation ID
+- Built-in JSON preview
+- Browser-based UI
+- Works offline after download
+- No installation required
+
+---
+
+## Supported Inputs
+
+### 1. Text Input
+
+Paste utterances, one per line:
+
+pay my bill
+check balance
+cancel subscription
+
+Each line becomes a separate conversation with one customer turn.
+
+---
+
+### 2. CSV Input
+
+Example:
+
+Conversation ID,Utterance,Prompt
+id_1,I want to pay my bill,Please let me know your account number
+id_1,123456,Thanks. What amount would you like to pay?
+
+This generates customer and agent turns inside a single conversation.
+
+---
+
+### 3. Genesys Table / Markdown Table Input
+
+The tool supports exported Genesys-style tables with columns such as:
+
+| Conversation ID | Session ID | Date | Utterance | Prompt | Ask Action Number | Ask Action Name | Ask Action Type | Ask Action Outcome | Intent |
+|-----------------|------------|------|-----------|--------|-------------------|-----------------|-----------------|--------------------|--------|
+
+The tool uses:
+
+- Conversation ID as the conversation ID
+- Utterance as the customer transcript
+- Prompt as the agent transcript
+
+The following columns are ignored:
+
+- Ask Action Number
+- Ask Action Name
+- Ask Action Type
+- Ask Action Outcome
+
+---
+
+## How to Export / Get Data from Genesys
+
+1. Log in to Genesys Cloud.
+2. Go to the bot or flow you want data from.
+3. Open the related Optimization Dashboard.
+4. Export the conversation/session data.
+5. Save the exported file locally.
+6. Upload or paste that data into this tool.
+
+---
+
+## Genesys Intent Miner JSON Template
+
+Genesys Intent Miner expects JSON in this general format:
+
+{
+  "locale": "en-us",
+  "conversations": [
+    {
+      "id": "id_1",
+      "turns": [
+        {
+          "participant": "customer",
+          "transcript": "I want to pay my bill"
+        },
+        {
+          "participant": "agent",
+          "transcript": "Please let me know your account number"
+        }
+      ]
+    }
+  ]
+}
+
+---
+
+## How to Use
+
+1. Export data from Genesys Cloud.
+2. Open this HTML file in a browser.
+3. Upload a CSV/TXT file or paste utterances/table data.
+4. Review conversation count and warnings.
+5. Click Preview.
+6. Click Generate JSON.
+7. Upload the generated JSON file into Genesys Intent Miner.
+
+---
+
+## Requirements
+
+No installation required.
+
+Supported browsers:
+
+- Microsoft Edge
+- Google Chrome
+- Mozilla Firefox
+- Safari
+
+---
+
+## Notes
+
+- No Genesys API required
+- Works entirely on your local machine
+- No data is uploaded externally
+- Warnings do not block generation
+- Always review the JSON before uploading to Intent Miner
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 <script>
 const MAX_CONVERSATIONS = 30000;
 const MAX_TRANSCRIPT = 500;
@@ -249,9 +546,15 @@ function closeModal() {
 }
 
 window.onclick = function(e) {
-  const modal = document.getElementById("helpModal");
-  if (e.target === modal) {
-    modal.style.display = "none";
+  const helpModal = document.getElementById("helpModal");
+  const readmeModal = document.getElementById("readmeModal");
+
+  if (e.target === helpModal) {
+    helpModal.style.display = "none";
+  }
+
+  if (e.target === readmeModal) {
+    readmeModal.style.display = "none";
   }
 };
 
@@ -748,6 +1051,31 @@ function generateJSON() {
     locale: "en-us",
     conversations: conversations
   }, "intent.json");
+}
+
+function openReadmeModal() {
+  const readmeText = document.getElementById("embeddedReadme").textContent.trim();
+  const viewer = document.getElementById("readmeViewer");
+
+  if (window.marked) {
+    viewer.innerHTML = marked.parse(readmeText);
+  } else {
+    viewer.textContent = readmeText;
+  }
+
+  document.getElementById("readmeModal").style.display = "block";
+}
+
+function closeReadmeModal() {
+  document.getElementById("readmeModal").style.display = "none";
+}
+
+function copyReadme() {
+  const readmeText = document.getElementById("embeddedReadme").textContent.trim();
+
+  navigator.clipboard.writeText(readmeText)
+    .then(() => alert("README copied to clipboard"))
+    .catch(() => alert("Unable to copy README"));
 }
 </script>
 
