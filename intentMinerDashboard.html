@@ -1032,7 +1032,7 @@ function download(data, name) {
   URL.revokeObjectURL(a.href);
 }
 
-// ---------- GENERATE ----------
+// ---------- GENERATE (updated) ----------
 function generateJSON() {
   const pastedText = document.getElementById("inputText").value;
 
@@ -1043,6 +1043,17 @@ function generateJSON() {
   if (conversations.length === 0) {
     alert("No data found");
     return;
+  }
+
+  // Ensure at least 20 conversations exist
+  while (conversations.length < 20) {
+    const copy = JSON.parse(
+      JSON.stringify(conversations[0])
+    );
+
+    copy.id = `generated_${conversations.length + 1}`;
+
+    conversations.push(copy);
   }
 
   updateStats();
